@@ -257,7 +257,6 @@ if __name__ == '__main__':
         weight_decay = round(loguniform.rvs(1e-4, 1, size=1)[0], 5)
         momentum = round(np.random.uniform(0, 1, size=1)[0], 5)
         gamma = round(loguniform.rvs(1e-5, 5e-1, size=1)[0], 5)
-        batch_size = 32
 
         psize = int(np.random.choice([1, 2], size=1)[0])
         conv_ks = int(np.random.choice([3, 5, 7, 9, 11], size=1)[0])
