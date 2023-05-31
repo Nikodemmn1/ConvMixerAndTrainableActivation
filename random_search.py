@@ -92,18 +92,15 @@ def train(args):
                       args['model']['architecture']['out_channels'])
 
     optimizer = Optimizer(optimizer_name, optimizer_params, model.parameters())
-    scheduler = Scheduler(optimizer, args['scheduler'])
 
     activation_name = args['model']['architecture']['activation']
     lr = args['optimizer']['parameters']['lr']
     batch_size = args['dataset']['batch_size']
     weight_decay = args['optimizer']['parameters']['weight_decay']
-    gamma = args['scheduler']['scheduler1']['parameters']['gamma']
-    momentum = args['optimizer']['parameters']['momentum']
     conv_ks = args['model']['architecture']['conv_ks']
     psize = args['model']['architecture']['psize']
     ra_m = args['dataset']['augmentations']['ra_m']
-    comment = f" activation_name = {activation_name} lr = {lr} batch_size = {batch_size} weight_decay = {weight_decay} momentum = {momentum} gamma = {gamma} psize = {psize} conv_ks = {conv_ks} ra_m = {ra_m}"
+    comment = f" activation_name = {activation_name} lr = {lr} batch_size = {batch_size} weight_decay = {weight_decay} psize = {psize} conv_ks = {conv_ks} ra_m = {ra_m}"
 
     tb = SummaryWriter(comment=comment)
 
@@ -144,6 +141,8 @@ def train(args):
     epochs_npz = np.array([ep for ep in range(epochs)])
     train_loss_npz = []
     valid_loss_npz = []
+    
+    def lr_schedule(t): return np.interp([t], [0, epochs*2//5, epochs*4//5, epochs], [0, args['optimizer']['parameters']['lr'], args['optimizer']['parameters']['lr']/20.0, 0])[0]
 
     for epoch in range(epochs):
         start = time.time()
@@ -162,7 +161,8 @@ def train(args):
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
-        scheduler.step()
+        lr = lr_schedule(epoch + (i + 1)/len(train_data_loader))
+        optimizer.param_groups[0].update(lr=lr)
 
         model.eval()
         with torch.no_grad():
@@ -249,38 +249,30 @@ if __name__ == '__main__':
 
     best_validation_accuracy = 0
 
-    for i in range(20):
+    for i in range(10):
         print(
             f"####################################### Sample {i+1} ############################################")
-        lr = round(loguniform.rvs(1e-4, 5e-1, size=1)[0], 5)
-        batch_size = int(np.random.choice([16, 32, 64, 128, 256, 512], size=1)[0])
-        weight_decay = round(loguniform.rvs(1e-4, 1, size=1)[0], 5)
-        momentum = round(np.random.uniform(0, 1, size=1)[0], 5)
-        gamma = round(loguniform.rvs(1e-5, 5e-1, size=1)[0], 5)
+        lr = round(loguniform.rvs(1e-5, 5e-1, size=1)[0], 5)
+        batch_size = int(np.random.choice([8,16,32, 64, 128], size=1)[0])
+        weight_decay = round(loguniform.rvs(1e-5, 1, size=1)[0], 5)
 
-        psize = int(np.random.choice([1, 2], size=1)[0])
-        conv_ks = int(np.random.choice([3, 5, 7, 9, 11], size=1)[0])
+        psize = int(np.random.choice([1,2], size=1)[0])
+        conv_ks = int(np.random.choice([3,5,7,9,11], size=1)[0])
         ra_m = random.randint(2, 16)
-
-        if batch_size == 512 and psize == 1:
-            psize = 2
-        if batch_size == 512 and conv_ks > 5:
-            conv_ks = int(np.random.choice([3, 5], size=1)[0])
-
-        if batch_size == 256 and psize == 1:
-            psize = 2
-        if batch_size == 256 and conv_ks > 7:
-            conv_ks = int(np.random.choice([3, 5, 7], size=1)[0])
+        
+        if batch_size == 128 and psize == 1:
+        	psize = 2
+        	
+        if batch_size == 64 and psize == 1:
+        	psize = 2
         
         print(
-            f"lr = {lr} batch_size = {batch_size} weight_decay = {weight_decay} momentum = {momentum} gamma = {gamma} "+
+            f"lr = {lr} batch_size = {batch_size} weight_decay = {weight_decay} "+
             f"psize = {psize} conv_ks = {conv_ks} ra_m = {ra_m}")
 
         args['dataset']['batch_size'] = batch_size
         args['optimizer']['parameters']['lr'] = lr
         args['optimizer']['parameters']['weight_decay'] = weight_decay
-        args['optimizer']['parameters']['momentum'] = momentum
-        args['scheduler']['scheduler1']['parameters']['gamma'] = gamma
 
         args['model']['architecture']['conv_ks'] = conv_ks
         args['model']['architecture']['psize'] = psize
@@ -294,8 +286,6 @@ if __name__ == '__main__':
             "batch_size": batch_size,
             "lr": lr,
             "weight_decay": weight_decay,
-            "gamma": gamma,
-            "momentum": momentum,
             "psize": psize,
             "conv_ks": conv_ks,
             "ra_m": ra_m
@@ -308,10 +298,8 @@ if __name__ == '__main__':
             best_batch_size = batch_size
             best_lr = lr
             best_weight_decay = weight_decay
-            best_gamma = gamma
-            best_momentum = momentum
 
     print(
         f"Best validation accuracy: {best_validation_accuracy} for lr = {best_lr} batch_size = {best_batch_size} "
-        f"weight_decay = {best_weight_decay} momentum = {best_momentum} gamma = {gamma} psize = {psize} conv_ks = {conv_ks} ra_m = {ra_m}")
+        f"weight_decay = {best_weight_decay} psize = {psize} conv_ks = {conv_ks} ra_m = {ra_m}")
     output.to_csv("result.csv")
